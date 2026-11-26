@@ -58,6 +58,41 @@ async function startBot() {
 
     const text = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').toLowerCase().trim();
     const from = msg.key.remoteJid;
+        // --- ENVOI DE NOTES PAR FICHIER EXCEL ---
+    if (msg.message?.documentMessage) {
+      const doc = msg.message.documentMessage;
+      const fileName = doc.fileName || '';
+      if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+        await sock.sendMessage(from, { text: '❌ Envoie-moi un fichier .xlsx s’il te plaît.' });
+        return;
+      }
+      await sock.sendMessage(from, { text: '📥 Fichier reçu, je lis les notes...' });
+      try {
+        const stream = await downloadContentFromMessage(doc, 'document');
+        let buffer = Buffer.from([]);
+        for await (const chunk of stream) { buffer = Buffer.concat([buffer, chunk]); }
+        const workbook = XLSX.read(buffer, { type: 'buffer' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const notes = XLSX.utils.sheet_to_json(sheet);
+        await sock.sendMessage(from, { text: `📋 J'ai trouvé ${notes.length} notes. J'envoie aux parents...` });
+        let ok = 0; let echec = 0;
+        for (let n of notes) {
+          try {
+            let tel = String(n.telephone_parent).replace(/[^0-9]/g, '');
+            if (!tel.startsWith('227')) tel = '227' + tel;
+            const msgParent = `Bonjour, 👋\n\nVotre enfant *${n.eleve}* (${n.classe}) a obtenu la note de *${n.note}/20* en *${n.matiere}*.\n\nMerci de suivre sa scolarité.\n- Direction de l'école`;
+            await sock.sendMessage(tel + '@s.whatsapp.net', { text: msgParent });
+            ok++;
+            await new Promise(r => setTimeout(r, 2000));
+          } catch (e) { echec++; }
+        }
+        await sock.sendMessage(from, { text: `✅ Terminé !\n\n✔️ Envoyé : ${ok} parents\n❌ Échec : ${echec}` });
+      } catch (err) {
+        console.log(err);
+        await sock.sendMessage(from, { text: '❌ Erreur. Vérifie les colonnes : eleve, classe, matiere, note, telephone_parent' });
+      }
+      return;
+    }
 
     let reply = null;
 
