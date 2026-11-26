@@ -58,6 +58,41 @@ async function startBot() {
 
     const text = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').toLowerCase().trim();
     const from = msg.key.remoteJid;
+        // --- ENVOI NOTES DEPUIS GOOGLE SHEETS ---
+    if (text === '!envoyer-notes') {
+      const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1pBTFUVeN47sroq8UJj7sAIUSEWugkzykCuM0JAQYrds/export?format=csv&gid=0';
+      await sock.sendMessage(from, { text: '📥 Je lis ton Google Sheet...' });
+      try {
+        const res = await fetch(SHEET_URL);
+        const csv = await res.text();
+        const lignes = csv.split('\n').slice(1);
+        let ok = 0; let echec = 0;
+        await sock.sendMessage(from, { text: `📋 J'ai trouvé ${lignes.length} lignes. J'envoie...` });
+
+        for (let ligne of lignes) {
+          if (!ligne.trim()) continue;
+          // On nettoie les guillemets de Google
+          const parts = ligne.split(',').map(s => s.trim().replace(/^"|"$/g, ''));
+          const [eleve, classe, matiere, note, telephone] = parts;
+          if (!eleve || !telephone) continue;
+          try {
+            let tel = String(telephone).replace(/[^0-9]/g, '');
+            if (tel.length === 8) tel = '227' + tel;
+            if (tel.startsWith('0')) tel = '227' + tel.slice(1);
+            const msgParent = `Bonjour, 👋\n\nVotre enfant *${eleve}* (${classe}) a obtenu la note de *${note}/20* en *${matiere}*.\n\nMerci de suivre sa scolarité.\n- Direction de l'école`;
+            await sock.sendMessage(tel + '@s.whatsapp.net', { text: msgParent });
+            ok++;
+            await new Promise(r => setTimeout(r, 2000));
+          } catch (e) { echec++; }
+        }
+        await sock.sendMessage(from, { text: `✅ Terminé !\n\n✔️ Envoyé : ${ok} parents\n❌ Échec : ${echec}` });
+      } catch (err) {
+        console.log(err);
+        await sock.sendMessage(from, { text: '❌ Impossible de lire le Sheet. Vérifie le partage.' });
+      }
+      return;
+    }
+    
         // --- ENVOI DE NOTES PAR FICHIER EXCEL ---
     if (msg.message?.documentMessage) {
       const doc = msg.message.documentMessage;
