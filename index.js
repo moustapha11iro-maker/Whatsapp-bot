@@ -1,7 +1,8 @@
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const http = require('http');
-
+const XLSX = require('xlsx');
+const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
 // Petit serveur pour que Render ne coupe pas le bot
 http.createServer((req, res) => {
   res.writeHead(200);
